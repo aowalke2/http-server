@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
+use std::thread;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
     for stream in listener.incoming() {
         match stream {
-            Ok(stream) => handle_connection(stream),
+            Ok(stream) => thread::spawn(|| handle_connection(stream)).join().unwrap(),
             Err(e) => println!("error: {}", e),
         }
     }
