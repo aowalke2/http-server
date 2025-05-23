@@ -23,9 +23,20 @@ fn handle_connection(mut stream: TcpStream) {
     let request_line = http_request[0].as_str().split(" ").collect::<Vec<&str>>();
     let route = request_line[1];
     let response = match route {
-        "/" => "HTTP/1.1 200 OK\r\n\r\n",
-        _ => "HTTP/1.1 404 Not Found\r\n\r\n",
+        "/" => "HTTP/1.1 200 OK\r\n\r\n".to_string(),
+        route if route.starts_with("/echo/") => handle_echo(route.to_string()),
+        _ => "HTTP/1.1 404 Not Found\r\n\r\n".to_string(),
     };
 
     stream.write_all(response.as_bytes()).unwrap();
+}
+
+fn handle_echo(route: String) -> String {
+    let route = route.split("/").collect::<Vec<&str>>();
+    let content = route.last().unwrap();
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+        content.chars().count(),
+        content
+    )
 }
