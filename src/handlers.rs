@@ -18,7 +18,6 @@ pub fn handle_connection(mut stream: TcpStream) {
     let http_request = Request::new(&mut stream);
     let route = http_request.route();
     let method = http_request.method();
-    //println!("{}", &http_request.content_type());
 
     let response = match (method, route[0].as_str()) {
         (HttpMethod::Get, "echo") => handle_echo(route[1].clone(), &http_request.headers()),
@@ -29,14 +28,13 @@ pub fn handle_connection(mut stream: TcpStream) {
         _ => Response::new(StatusCode::NotFound).build(),
     };
 
-    stream.write_all(response.as_bytes()).unwrap();
+    stream.write_all(&response).unwrap();
 }
 
-fn handle_echo(content: String, headers: &HashMap<String, String>) -> String {
+fn handle_echo(content: String, headers: &HashMap<String, String>) -> Vec<u8> {
     let response = Response::new(StatusCode::Ok)
         .with_header("Content-Type", "text/plain")
-        .with_header("Content-Length", &content.chars().count().to_string())
-        .with_body(&content);
+        .with_header("Content-Length", &content.chars().count().to_string());
 
     if let Some(encodings) = headers.get("Accept-Encoding") {
         let mut valid_encodings = Vec::new();
@@ -45,24 +43,33 @@ fn handle_echo(content: String, headers: &HashMap<String, String>) -> String {
                 valid_encodings.push(encoding);
             }
         }
-        response
-            .with_header("Content-Encoding", valid_encodings.join(", ").as_str())
-            .build()
+
+        match valid_encodings.contains(&"gzip") {
+            true => response
+                .with_header("Content-Encoding", valid_encodings.join(", ").as_str())
+                .with_body(&content.as_bytes().to_vec())
+                .with_gzip()
+                .build(),
+            false => response
+                .with_header("Content-Encoding", valid_encodings.join(", ").as_str())
+                .with_body(&content.as_bytes().to_vec())
+                .build(),
+        }
     } else {
-        response.build()
+        response.with_body(&content.as_bytes().to_vec()).build()
     }
 }
 
-fn handle_user_agent(headers: &HashMap<String, String>) -> String {
+fn handle_user_agent(headers: &HashMap<String, String>) -> Vec<u8> {
     let content = headers.get("User-Agent").unwrap();
     Response::new(StatusCode::Ok)
         .with_header("Content-Type", "text/plain")
         .with_header("Content-Length", &content.chars().count().to_string())
-        .with_body(&content)
+        .with_body(&content.as_bytes().to_vec())
         .build()
 }
 
-fn handle_read_file(file: String) -> String {
+fn handle_read_file(file: String) -> Vec<u8> {
     if let Some(dir) = env::args().nth(2) {
         match File::open(Path::new(&dir).join(file)) {
             Ok(mut file) => {
@@ -71,7 +78,7 @@ fn handle_read_file(file: String) -> String {
                 Response::new(StatusCode::Ok)
                     .with_header("Content-Type", "application/octet-stream")
                     .with_header("Content-Length", &content.chars().count().to_string())
-                    .with_body(&content)
+                    .with_body(&content.as_bytes().to_vec())
                     .build()
             }
             Err(_) => Response::new(StatusCode::NotFound).build(),
@@ -81,7 +88,7 @@ fn handle_read_file(file: String) -> String {
     }
 }
 
-fn handle_create_file(file: String, content: String) -> String {
+fn handle_create_file(file: String, content: String) -> Vec<u8> {
     if let Some(dir) = env::args().nth(2) {
         match File::create(Path::new(&dir).join(file)) {
             Ok(mut file) => {
