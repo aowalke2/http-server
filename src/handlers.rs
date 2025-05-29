@@ -14,8 +14,8 @@ use crate::{
 
 const COMPRESSION_SCHEMES: [&str; 1] = ["gzip"];
 
-pub fn handle_connection(mut stream: TcpStream) {
-    let http_request = Request::new(&mut stream);
+pub fn handle_connection(stream: &mut TcpStream) {
+    let http_request = Request::new(&stream);
     let route = http_request.route();
     let method = http_request.method();
 
@@ -29,6 +29,7 @@ pub fn handle_connection(mut stream: TcpStream) {
     };
 
     stream.write_all(&response).unwrap();
+    stream.flush().unwrap()
 }
 
 fn handle_echo(content: String, headers: &HashMap<String, String>) -> Vec<u8> {
