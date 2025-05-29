@@ -1,7 +1,7 @@
 use flate2::{write::GzEncoder, Compression};
 use std::{collections::HashMap, io::Write};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum StatusCode {
     NotFound,
     Ok,
@@ -18,11 +18,18 @@ impl From<StatusCode> for String {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum CompressionKind {
+    Gzip,
+    None,
+}
+
+#[derive(Debug)]
 pub struct Response {
     status: StatusCode,
     headers: HashMap<String, String>,
     body: Vec<u8>,
-    gzip: bool,
+    compression_kind: CompressionKind,
 }
 
 impl Response {
@@ -31,7 +38,7 @@ impl Response {
             status,
             headers: HashMap::new(),
             body: Vec::new(),
-            gzip: false,
+            compression_kind: CompressionKind::None,
         }
     }
 
@@ -45,25 +52,28 @@ impl Response {
         self
     }
 
-    pub fn with_gzip(mut self) -> Self {
-        self.gzip = true;
+    pub fn with_compression(mut self, compression_kind: CompressionKind) -> Self {
+        self.compression_kind = compression_kind;
         self
     }
 
-    pub fn build(mut self) -> Vec<u8> {
+    pub fn build(&mut self) -> Vec<u8> {
         let mut response = Vec::new();
         response.extend_from_slice(String::from(self.status).as_bytes());
 
-        if self.gzip {
-            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-            encoder.write_all(&self.body).unwrap();
-            self.body = encoder.finish().unwrap();
-            if let Some(length) = self.headers.get_mut("Content-Length") {
-                *length = self.body.len().to_string();
+        match self.compression_kind {
+            CompressionKind::Gzip => {
+                let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+                encoder.write_all(&self.body).unwrap();
+                self.body = encoder.finish().unwrap();
+                if let Some(length) = self.headers.get_mut("Content-Length") {
+                    *length = self.body.len().to_string();
+                }
             }
+            CompressionKind::None => {}
         }
 
-        for (key, value) in self.headers {
+        for (key, value) in self.headers.iter() {
             response.extend_from_slice(&format!("{}: {}\r\n", key, value).as_bytes());
         }
 

@@ -14,9 +14,7 @@ fn main() {
         match stream {
             Err(e) => eprintln!("error: {}", e),
             Ok(mut stream) => {
-                thread::spawn(move || loop {
-                    handle_connection(&mut stream);
-                });
+                thread::spawn(move || handle_connection(&mut stream));
             }
         }
     }
